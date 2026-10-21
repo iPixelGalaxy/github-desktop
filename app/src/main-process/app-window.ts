@@ -29,6 +29,7 @@ import {
 import { addTrustedIPCSender } from './trusted-ipc-sender'
 import { getUpdaterGUID } from '../lib/get-updater-guid'
 import { CLIAction } from '../lib/cli-action'
+import { enableAppUpdates } from '../lib/feature-flag'
 
 export class AppWindow {
   private window: Electron.BrowserWindow
@@ -408,6 +409,10 @@ export class AppWindow {
   }
 
   public setupAutoUpdater() {
+    if (!enableAppUpdates()) {
+      return
+    }
+
     autoUpdater.on('error', (error: Error) => {
       this.isDownloadingUpdate = false
       ipcWebContents.send(this.window.webContents, 'auto-updater-error', error)
@@ -447,6 +452,10 @@ export class AppWindow {
   }
 
   public async checkForUpdates(url: string) {
+    if (!enableAppUpdates()) {
+      return undefined
+    }
+
     try {
       autoUpdater.setFeedURL({ url: await trySetUpdaterGuid(url) })
       autoUpdater.checkForUpdates()
@@ -457,6 +466,10 @@ export class AppWindow {
   }
 
   public quitAndInstallUpdate() {
+    if (!enableAppUpdates()) {
+      return
+    }
+
     autoUpdater.quitAndInstall()
   }
 

@@ -201,6 +201,7 @@ import { TestCLIActionDialog } from './cli-action/test-cli-action-dialog'
 import { TestCopilotSnapshotCardDialog } from './preferences/test-copilot-snapshot-card-dialog'
 import { TestTokenExpirationDialog } from './preferences/test-token-expiration-dialog'
 import {
+  enableAppUpdates,
   enableCopilotSdkCommitMessageGeneration,
   enableCopilotAppHandoff,
   enableWorktreeSupport,
@@ -395,18 +396,20 @@ export class App extends React.Component<IAppProps, IAppState> {
 
     this.props.dispatcher.installGlobalLFSFilters(false)
 
-    // We only want to automatically check for updates on beta and prod
-    if (
-      __RELEASE_CHANNEL__ !== 'development' &&
-      __RELEASE_CHANNEL__ !== 'test'
-    ) {
-      setInterval(() => this.checkForUpdates(true), UpdateCheckInterval)
-      this.checkForUpdates(true)
-    } else if (await updateStore.isUpdateShowcase()) {
-      // The only purpose of this call is so we can see the showcase on dev/test
-      // env. Prod and beta environment will trigger this during automatic check
-      // for updates.
-      this.props.dispatcher.setUpdateShowCaseVisibility(true)
+    if (enableAppUpdates()) {
+      // We only want to automatically check for updates on beta and prod
+      if (
+        __RELEASE_CHANNEL__ !== 'development' &&
+        __RELEASE_CHANNEL__ !== 'test'
+      ) {
+        setInterval(() => this.checkForUpdates(true), UpdateCheckInterval)
+        this.checkForUpdates(true)
+      } else if (await updateStore.isUpdateShowcase()) {
+        // The only purpose of this call is so we can see the showcase on dev/test
+        // env. Prod and beta environment will trigger this during automatic check
+        // for updates.
+        this.props.dispatcher.setUpdateShowCaseVisibility(true)
+      }
     }
 
     log.info(`launching: ${getVersion()} (${getOS()})`)
@@ -660,7 +663,11 @@ export class App extends React.Component<IAppProps, IAppState> {
     inBackground: boolean,
     skipGuidCheck: boolean = false
   ) {
-    if (__LINUX__ || __RELEASE_CHANNEL__ === 'development') {
+    if (
+      !enableAppUpdates() ||
+      __LINUX__ ||
+      __RELEASE_CHANNEL__ === 'development'
+    ) {
       return
     }
 

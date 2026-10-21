@@ -10,6 +10,7 @@ import {
 } from '../dialog'
 import { LinkButton } from '../lib/link-button'
 import { IUpdateState, UpdateStatus } from '../lib/update-store'
+import { enableAppUpdates } from '../../lib/feature-flag'
 import { Loading } from '../lib/loading'
 import { RelativeTime } from '../relative-time'
 import { assertNever } from '../../lib/fatal-error'
@@ -90,8 +91,9 @@ class UpdateInfo extends React.Component<IUpdateInfoProps> {
 export class About extends React.Component<IAboutProps> {
   private get canCheckForUpdates() {
     return (
-      __RELEASE_CHANNEL__ !== 'development' ||
-      this.props.allowDevelopment === true
+      enableAppUpdates() &&
+      (__RELEASE_CHANNEL__ !== 'development' ||
+        this.props.allowDevelopment === true)
     )
   }
 
@@ -142,6 +144,15 @@ export class About extends React.Component<IAboutProps> {
   }
 
   private renderUpdateDetails() {
+    if (!enableAppUpdates()) {
+      return (
+        <p>
+          Automatic updates are disabled for this custom build. To update,
+          install a newer custom version manually.
+        </p>
+      )
+    }
+
     if (__LINUX__) {
       return null
     }

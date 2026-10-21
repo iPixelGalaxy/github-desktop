@@ -1,5 +1,12 @@
 {
   "releases": {
+    "3.6.8-custom1": [
+      "[Added] Choose Default, Version, or Latest branch sorting below the filter, with the default branch always kept at the top.",
+      "[Improved] Sort version branches by their complete numeric components, including multi-digit versions and prereleases.",
+      "[Added] Sort by recorded local branch creation time with Latest; branches without creation dates appear last.",
+      "[Improved] Keep up to five recent branches after excluding deleted and default branches.",
+      "[Removed] Disable built-in update checks and downloads. Update this custom build by installing a newer custom version manually."
+    ],
     "3.6.8-beta3": [
       "[Fixed] Keep the port when building GitHub Enterprise Server sign-in and link URLs, so instances running on a non-default port work correctly - #23046",
       "[Fixed] Fix right-edge clipping of italicized text and keep descriptive context fully visible in the user autocompletion list - #21820. Thanks @hi2242!",

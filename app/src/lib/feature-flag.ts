@@ -2,6 +2,9 @@ import { Account } from '../models/account'
 
 const Disable = false
 
+/** Custom builds are updated manually with a replacement installer. */
+export const enableAppUpdates = () => false
+
 /**
  * Opt in new OAuth authorizations during development and preview testing.
  * Existing rotating credentials must keep renewing even when this is disabled.

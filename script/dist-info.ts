@@ -147,7 +147,11 @@ export function getUpdatesURL() {
 export function shouldMakeDelta() {
   // Only production and beta channels include deltas. Test releases aren't
   // necessarily sequential so deltas wouldn't make sense.
-  return ['production', 'beta'].includes(getChannel())
+  // Custom builds must not use an upstream release as their delta baseline.
+  return (
+    !version.includes('-custom') &&
+    ['production', 'beta'].includes(getChannel())
+  )
 }
 
 /**
