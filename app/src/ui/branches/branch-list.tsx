@@ -8,6 +8,7 @@ import { SelectionSource } from '../lib/filter-list'
 import { IMatches } from '../../lib/fuzzy-find'
 import { Button } from '../lib/button'
 import { TextBox } from '../lib/text-box'
+import { Select } from '../lib/select'
 
 import {
   groupBranches,
@@ -23,8 +24,13 @@ import memoizeOne from 'memoize-one'
 import { getAuthors } from '../../lib/git/log'
 import { Repository } from '../../models/repository'
 import { formatDate } from '../../lib/format-date'
+import { getEnum } from '../../lib/local-storage'
+import { parseEnumValue } from '../../lib/enum'
+import { getBranchCreationDates } from '../../lib/git/reflog'
+import { BranchSortOrder, sortBranches } from './sort-branches'
 
 const RowHeight = 30
+const BranchSortOrderKey = 'branch-sort-order'
 
 interface IBranchListProps {
   readonly repository: Repository
@@ -138,6 +144,8 @@ interface IBranchListProps {
 
 interface IBranchListState {
   readonly commitAuthorDates: ReadonlyMap<string, Date>
+  readonly sortOrder: BranchSortOrder
+  readonly branchCreationDates: ReadonlyMap<string, number>
 }
 
 const commitDateCache = new Map<string, Date>()
@@ -148,8 +156,10 @@ export class BranchList extends React.Component<
   IBranchListState
 > {
   private branchFilterList: SectionFilterList<IBranchListItem> | null = null
+  private branchCreationRequestID = 0
 
   private getGroups = memoizeOne(groupBranches)
+  private getSortedBranches = memoizeOne(sortBranches)
   private getSelectedItem = memoizeOne(
     (groups: ReturnType<typeof groupBranches>, selectedBranch: Branch | null) =>
       groups
@@ -184,7 +194,11 @@ export class BranchList extends React.Component<
     return this.getGroups(
       this.props.defaultBranch,
       this.props.currentBranch,
-      this.props.allBranches,
+      this.getSortedBranches(
+        this.props.allBranches,
+        this.state.sortOrder,
+        this.state.branchCreationDates
+      ),
       this.props.recentBranches
     )
   }
@@ -197,6 +211,9 @@ export class BranchList extends React.Component<
     super(props)
     this.state = {
       commitAuthorDates: new Map<string, Date>(),
+      sortOrder:
+        getEnum(BranchSortOrderKey, BranchSortOrder) ?? BranchSortOrder.Default,
+      branchCreationDates: new Map<string, number>(),
     }
   }
 
@@ -206,10 +223,42 @@ export class BranchList extends React.Component<
     }
   }
 
-  public componentDidUpdate(prevProps: IBranchListProps) {
+  public componentDidUpdate(
+    prevProps: IBranchListProps,
+    prevState: IBranchListState
+  ) {
     if (prevProps.allBranches !== this.props.allBranches) {
       this.populateCommitDates()
     }
+
+    if (
+      this.state.sortOrder === BranchSortOrder.Latest &&
+      (prevState.sortOrder !== this.state.sortOrder ||
+        prevProps.repository.path !== this.props.repository.path ||
+        prevProps.allBranches.length !== this.props.allBranches.length ||
+        prevProps.allBranches.some(
+          (branch, i) => branch.ref !== this.props.allBranches[i].ref
+        ))
+    ) {
+      this.populateBranchCreationDates()
+    }
+  }
+
+  public componentWillUnmount() {
+    this.branchCreationRequestID++
+  }
+
+  private populateBranchCreationDates = () => {
+    const requestID = ++this.branchCreationRequestID
+    this.setState({ branchCreationDates: new Map<string, number>() })
+
+    getBranchCreationDates(this.props.repository)
+      .then(branchCreationDates => {
+        if (requestID === this.branchCreationRequestID) {
+          this.setState({ branchCreationDates })
+        }
+      })
+      .catch(e => log.error('Failed to populate branch creation dates', e))
   }
 
   private populateCommitDates = () => {
@@ -247,6 +296,9 @@ export class BranchList extends React.Component<
 
   public componentDidMount() {
     this.populateCommitDates()
+    if (this.state.sortOrder === BranchSortOrder.Latest) {
+      this.populateBranchCreationDates()
+    }
   }
 
   public render() {
@@ -267,7 +319,7 @@ export class BranchList extends React.Component<
         onEnterPressedWithoutFilteredItems={this.onCreateNewBranch}
         groups={this.groups}
         invalidationProps={this.invalidationProp}
-        renderPostFilter={this.onRenderNewButton}
+        renderPostFilter={this.renderFilterControls}
         renderNoItems={this.onRenderNoItems}
         filterTextBox={this.props.textbox}
         hideFilterRow={this.props.hideFilterRow}
@@ -407,12 +459,42 @@ export class BranchList extends React.Component<
     )
   }
 
-  private onRenderNewButton = () => {
-    return this.props.canCreateNewBranch ? (
-      <Button className="new-branch-button" onClick={this.onCreateNewBranch}>
-        {__DARWIN__ ? 'New Branch' : 'New branch'}
-      </Button>
-    ) : null
+  private renderFilterControls = () => {
+    return (
+      <>
+        {this.props.canCreateNewBranch && (
+          <Button
+            className="new-branch-button"
+            onClick={this.onCreateNewBranch}
+          >
+            {__DARWIN__ ? 'New Branch' : 'New branch'}
+          </Button>
+        )}
+        <Select
+          className="branch-sort"
+          label="Sort branches"
+          value={this.state.sortOrder}
+          onChange={this.onSortOrderChanged}
+        >
+          <option value={BranchSortOrder.Default}>Default</option>
+          <option value={BranchSortOrder.Version}>Version</option>
+          <option value={BranchSortOrder.Latest}>Latest</option>
+        </Select>
+        {this.state.sortOrder === BranchSortOrder.Latest && (
+          <div className="branch-sort-description">
+            Newest local branches first. Unknown creation dates appear last.
+          </div>
+        )}
+      </>
+    )
+  }
+
+  private onSortOrderChanged = (event: React.FormEvent<HTMLSelectElement>) => {
+    const sortOrder = parseEnumValue(BranchSortOrder, event.currentTarget.value)
+    if (sortOrder !== undefined) {
+      localStorage.setItem(BranchSortOrderKey, sortOrder)
+      this.setState({ sortOrder })
+    }
   }
 
   private onItemClick = (item: IBranchListItem, source: ClickSource) => {

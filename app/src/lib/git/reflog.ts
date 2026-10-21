@@ -1,12 +1,56 @@
 import { git } from './core'
 import { Repository } from '../../models/repository'
+import { createLogParser } from './git-delimiter-parser'
 
 /**
- * Get the `limit` most recently checked out branches.
+ * Read local branch creation times from surviving reflog entries.
+ * Remote refs and branches whose creation entries have expired have no date.
+ */
+export async function getBranchCreationDates(
+  repository: Repository
+): Promise<ReadonlyMap<string, number>> {
+  const { formatArgs, parse } = createLogParser({ selector: '%gD' })
+  const result = await git(
+    [
+      'log',
+      '--walk-reflogs',
+      '--glob=refs/heads/*',
+      '--date=unix',
+      '--no-show-signature',
+      '--extended-regexp',
+      '--regexp-ignore-case',
+      '--grep-reflog=^(branch: (Created from |copied )|clone: |commit \\(initial\\):)',
+      ...formatArgs,
+      '--',
+    ],
+    repository.path,
+    'getBranchCreationDates',
+    { successExitCodes: new Set([0, 128]) }
+  )
+
+  const dates = new Map<string, number>()
+  if (result.exitCode !== 0) {
+    return dates
+  }
+
+  for (const { selector } of parse(result.stdout)) {
+    const match = /^(refs\/heads\/.+)@\{(-?\d+)\}$/.exec(selector)
+    if (match !== null && !dates.has(match[1])) {
+      // Reflogs are newest first. A branch copy creates a new branch even
+      // though it also inherits the source branch's older creation entry.
+      dates.set(match[1], Number(match[2]) * 1000)
+    }
+  }
+
+  return dates
+}
+
+/**
+ * Get the most recently checked out branches, optionally limited in count.
  */
 export async function getRecentBranches(
   repository: Repository,
-  limit: number
+  limit?: number
 ): Promise<ReadonlyArray<string>> {
   // "git reflog show" is just an alias for "git log -g --abbrev-commit --pretty=oneline"
   // but by using log we can give it a max number which should prevent us from balling out

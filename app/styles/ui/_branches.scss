@@ -171,6 +171,45 @@
 }
 
 .branches-list {
+  .filter-field-row {
+    flex-wrap: wrap;
+
+    .filter-list-filter-field {
+      margin-right: 0;
+    }
+
+    .new-branch-button {
+      margin-left: var(--spacing);
+      margin-right: 0;
+    }
+
+    .branch-sort {
+      flex-basis: 100%;
+      flex-direction: row;
+      align-items: center;
+      margin-top: var(--spacing-half);
+      margin-right: 0;
+
+      label {
+        margin-bottom: 0;
+        margin-right: var(--spacing);
+      }
+
+      select {
+        flex: 1;
+        min-width: 0;
+        width: auto;
+      }
+    }
+
+    .branch-sort-description {
+      flex-basis: 100%;
+      margin-top: var(--spacing-half);
+      font-size: var(--font-size-sm);
+      color: var(--text-secondary-color);
+    }
+  }
+
   &-item {
     padding: 0 var(--spacing);
   }
