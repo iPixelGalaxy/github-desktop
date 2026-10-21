@@ -14,6 +14,52 @@ export enum BranchSortDirection {
 
 const branchNameComparer = new Intl.Collator('en', { numeric: true })
 
+interface IBranchVersion {
+  readonly prefixed: boolean
+  readonly core: string
+  readonly patch: number
+  readonly version: string
+}
+
+/** Extract the application version without confusing it with a Unity target. */
+function parseBranchVersion(name: string): IBranchVersion | null {
+  const match =
+    /v?(\d+(?:\.\d+){1,3})(?:p(\d+))?/i.exec(name) ??
+    /^v?(\d+)(?:p(\d+))?$/i.exec(name)
+
+  if (match === null) {
+    return null
+  }
+
+  const prefix = name.slice(0, match.index)
+  if (prefix.length > 0 && !/\p{L}/u.test(prefix)) {
+    return null
+  }
+
+  const core = match[1]
+  const suffix = name.slice(match.index + match[0].length)
+  if (suffix.length > 0 && !suffix.startsWith('-') && !suffix.startsWith('+')) {
+    return null
+  }
+
+  // A target such as -2018.3.10f1 describes compatibility, not a prerelease.
+  const isUnityTarget = /^-\d+\.\d+\.\d+(?:[abcfp]\d+|x\d*)(?:[-+].*)?$/i.test(
+    suffix
+  )
+  const version = isUnityTarget ? core : `${core}${suffix}`
+
+  if (!compareVersions.validate(version)) {
+    return null
+  }
+
+  return {
+    prefixed: prefix.length > 0,
+    core,
+    patch: Number(match[2] ?? 0),
+    version,
+  }
+}
+
 /** Sort branch names without changing the repository's original branch order. */
 export function sortBranches(
   branches: ReadonlyArray<Branch>,
@@ -47,17 +93,22 @@ export function sortBranches(
         return (aDate - bDate) * multiplier
       }
     } else {
-      // Also recognize version branches such as release/v1.10.0.
-      const aVersion = aName.slice(aName.lastIndexOf('/') + 1)
-      const bVersion = bName.slice(bName.lastIndexOf('/') + 1)
-      const aIsVersion = compareVersions.validate(aVersion)
-      const bIsVersion = compareVersions.validate(bVersion)
+      const aVersion = parseBranchVersion(aName)
+      const bVersion = parseBranchVersion(bName)
 
-      if (aIsVersion !== bIsVersion) {
-        return aIsVersion ? -1 : 1
+      if ((aVersion === null) !== (bVersion === null)) {
+        return aVersion === null ? 1 : -1
       }
-      if (aIsVersion && bIsVersion) {
-        const result = compareVersions(aVersion, bVersion)
+      if (aVersion !== null && bVersion !== null) {
+        // Word prefixes form a newer group, even when their numbers are lower.
+        if (aVersion.prefixed !== bVersion.prefixed) {
+          return (aVersion.prefixed ? 1 : -1) * multiplier
+        }
+
+        const result =
+          compareVersions(aVersion.core, bVersion.core) ||
+          aVersion.patch - bVersion.patch ||
+          compareVersions(aVersion.version, bVersion.version)
         if (result !== 0) {
           return result * multiplier
         }

@@ -1,5 +1,9 @@
 {
   "releases": {
+    "3.6.8-custom3": [
+      "[Fixed] Treat p1, p2, and later branch patches as newer than their base version, including branches with Unity version suffixes.",
+      "[Improved] Treat version branches with word prefixes, such as latest-0.10.2, as newer than generic versions and sort each group numerically."
+    ],
     "3.6.8-custom2": [
       "[Added] Toggle ascending or descending branch order with the arrow beside the sort dropdown. Your chosen direction is remembered.",
       "[Improved] Provide the Windows installer as an EXE without generating an MSI."
