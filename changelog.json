@@ -1,5 +1,9 @@
 {
   "releases": {
+    "3.6.8-custom2": [
+      "[Added] Toggle ascending or descending branch order with the arrow beside the sort dropdown. Your chosen direction is remembered.",
+      "[Improved] Provide the Windows installer as an EXE without generating an MSI."
+    ],
     "3.6.8-custom1": [
       "[Added] Choose Default, Version, or Latest branch sorting below the filter, with the default branch always kept at the top.",
       "[Improved] Sort version branches by their complete numeric components, including multi-digit versions and prereleases.",

@@ -9,6 +9,7 @@ import { IMatches } from '../../lib/fuzzy-find'
 import { Button } from '../lib/button'
 import { TextBox } from '../lib/text-box'
 import { Select } from '../lib/select'
+import { Octicon, arrowUp, arrowDown } from '../octicons'
 
 import {
   groupBranches,
@@ -27,10 +28,24 @@ import { formatDate } from '../../lib/format-date'
 import { getEnum } from '../../lib/local-storage'
 import { parseEnumValue } from '../../lib/enum'
 import { getBranchCreationDates } from '../../lib/git/reflog'
-import { BranchSortOrder, sortBranches } from './sort-branches'
+import {
+  BranchSortOrder,
+  BranchSortDirection,
+  sortBranches,
+} from './sort-branches'
 
 const RowHeight = 30
 const BranchSortOrderKey = 'branch-sort-order'
+const BranchSortDirectionKey = 'branch-sort-direction'
+
+function getSortDirection(order: BranchSortOrder): BranchSortDirection {
+  return (
+    getEnum(BranchSortDirectionKey, BranchSortDirection) ??
+    (order === BranchSortOrder.Latest
+      ? BranchSortDirection.Descending
+      : BranchSortDirection.Ascending)
+  )
+}
 
 interface IBranchListProps {
   readonly repository: Repository
@@ -145,6 +160,7 @@ interface IBranchListProps {
 interface IBranchListState {
   readonly commitAuthorDates: ReadonlyMap<string, Date>
   readonly sortOrder: BranchSortOrder
+  readonly sortDirection: BranchSortDirection
   readonly branchCreationDates: ReadonlyMap<string, number>
 }
 
@@ -197,6 +213,7 @@ export class BranchList extends React.Component<
       this.getSortedBranches(
         this.props.allBranches,
         this.state.sortOrder,
+        this.state.sortDirection,
         this.state.branchCreationDates
       ),
       this.props.recentBranches
@@ -209,10 +226,12 @@ export class BranchList extends React.Component<
 
   public constructor(props: IBranchListProps) {
     super(props)
+    const sortOrder =
+      getEnum(BranchSortOrderKey, BranchSortOrder) ?? BranchSortOrder.Default
     this.state = {
       commitAuthorDates: new Map<string, Date>(),
-      sortOrder:
-        getEnum(BranchSortOrderKey, BranchSortOrder) ?? BranchSortOrder.Default,
+      sortOrder,
+      sortDirection: getSortDirection(sortOrder),
       branchCreationDates: new Map<string, number>(),
     }
   }
@@ -460,6 +479,9 @@ export class BranchList extends React.Component<
   }
 
   private renderFilterControls = () => {
+    const descending =
+      this.state.sortDirection === BranchSortDirection.Descending
+
     return (
       <>
         {this.props.canCreateNewBranch && (
@@ -470,19 +492,35 @@ export class BranchList extends React.Component<
             {__DARWIN__ ? 'New Branch' : 'New branch'}
           </Button>
         )}
-        <Select
-          className="branch-sort"
-          label="Sort branches"
-          value={this.state.sortOrder}
-          onChange={this.onSortOrderChanged}
-        >
-          <option value={BranchSortOrder.Default}>Default</option>
-          <option value={BranchSortOrder.Version}>Version</option>
-          <option value={BranchSortOrder.Latest}>Latest</option>
-        </Select>
+        <div className="branch-sort-row">
+          <Select
+            className="branch-sort"
+            label="Sort branches"
+            value={this.state.sortOrder}
+            onChange={this.onSortOrderChanged}
+          >
+            <option value={BranchSortOrder.Default}>Default</option>
+            <option value={BranchSortOrder.Version}>Version</option>
+            <option value={BranchSortOrder.Latest}>Latest</option>
+          </Select>
+          <Button
+            className="branch-sort-direction"
+            ariaLabel="Descending branch order"
+            ariaPressed={descending}
+            tooltip={
+              descending
+                ? 'Descending order. Click to sort ascending.'
+                : 'Ascending order. Click to sort descending.'
+            }
+            onClick={this.onToggleSortDirection}
+          >
+            <Octicon symbol={descending ? arrowDown : arrowUp} />
+          </Button>
+        </div>
         {this.state.sortOrder === BranchSortOrder.Latest && (
           <div className="branch-sort-description">
-            Newest local branches first. Unknown creation dates appear last.
+            {descending ? 'Newest' : 'Oldest'} local branches first. Unknown
+            creation dates appear last.
           </div>
         )}
       </>
@@ -493,8 +531,18 @@ export class BranchList extends React.Component<
     const sortOrder = parseEnumValue(BranchSortOrder, event.currentTarget.value)
     if (sortOrder !== undefined) {
       localStorage.setItem(BranchSortOrderKey, sortOrder)
-      this.setState({ sortOrder })
+      this.setState({ sortOrder, sortDirection: getSortDirection(sortOrder) })
     }
+  }
+
+  private onToggleSortDirection = () => {
+    const sortDirection =
+      this.state.sortDirection === BranchSortDirection.Ascending
+        ? BranchSortDirection.Descending
+        : BranchSortDirection.Ascending
+
+    localStorage.setItem(BranchSortDirectionKey, sortDirection)
+    this.setState({ sortDirection })
   }
 
   private onItemClick = (item: IBranchListItem, source: ClickSource) => {

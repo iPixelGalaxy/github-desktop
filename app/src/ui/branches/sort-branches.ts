@@ -7,17 +7,27 @@ export enum BranchSortOrder {
   Latest = 'latest',
 }
 
+export enum BranchSortDirection {
+  Ascending = 'ascending',
+  Descending = 'descending',
+}
+
 const branchNameComparer = new Intl.Collator('en', { numeric: true })
 
 /** Sort branch names without changing the repository's original branch order. */
 export function sortBranches(
   branches: ReadonlyArray<Branch>,
   order: BranchSortOrder,
+  direction: BranchSortDirection,
   creationDates: ReadonlyMap<string, number>
 ): ReadonlyArray<Branch> {
   if (order === BranchSortOrder.Default) {
-    return branches
+    return direction === BranchSortDirection.Ascending
+      ? branches
+      : [...branches].reverse()
   }
+
+  const multiplier = direction === BranchSortDirection.Ascending ? 1 : -1
 
   return [...branches].sort((a, b) => {
     const aName = a.nameWithoutRemote
@@ -34,7 +44,7 @@ export function sortBranches(
         if (bDate === undefined) {
           return -1
         }
-        return bDate - aDate
+        return (aDate - bDate) * multiplier
       }
     } else {
       // Also recognize version branches such as release/v1.10.0.
@@ -49,14 +59,14 @@ export function sortBranches(
       if (aIsVersion && bIsVersion) {
         const result = compareVersions(aVersion, bVersion)
         if (result !== 0) {
-          return result
+          return result * multiplier
         }
       }
     }
 
     return (
-      branchNameComparer.compare(aName, bName) ||
-      branchNameComparer.compare(a.name, b.name)
+      (branchNameComparer.compare(aName, bName) ||
+        branchNameComparer.compare(a.name, b.name)) * multiplier
     )
   })
 }
