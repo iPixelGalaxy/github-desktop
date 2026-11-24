@@ -1,4 +1,6 @@
 import * as React from 'react'
+import { isAssistedCommitRepositoryLocked } from '../../models/assisted-commit-run'
+import { isRepositoryAffectedByAssistedCommit } from '../../lib/git/repository-operation'
 import { Dispatcher } from '../dispatcher'
 import * as octicons from '../octicons/octicons.generated'
 import { OcticonSymbol, syncClockwise } from '../octicons'
@@ -94,6 +96,14 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
 
   private renderBranchFoldout = (): JSX.Element | null => {
     const repositoryState = this.props.repositoryState
+    if (
+      isAssistedCommitRepositoryLocked(
+        repositoryState.changesState.assistedCommit
+      ) ||
+      isRepositoryAffectedByAssistedCommit(this.props.repository.path)
+    ) {
+      return null
+    }
     const branchesState = repositoryState.branchesState
 
     const tip = repositoryState.branchesState.tip
@@ -122,8 +132,18 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
 
   private onDropDownStateChanged = (state: DropdownState) => {
     // Don't allow opening the drop down when checkout is in progress
-    if (state === 'open' && this.props.repositoryState.checkoutProgress) {
+    if (
+      state === 'open' &&
+      (this.props.repositoryState.checkoutProgress ||
+        isAssistedCommitRepositoryLocked(
+          this.props.repositoryState.changesState.assistedCommit
+        ))
+    ) {
       return
+    }
+
+    if (this.props.showCIStatusPopover) {
+      this.closePopover()
     }
 
     this.props.onDropDownStateChanged(state)
@@ -142,7 +162,9 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
     let title: string
     let description = __DARWIN__ ? 'Current Branch' : 'Current branch'
     let canOpen = true
-    let disabled = false
+    let disabled =
+      isAssistedCommitRepositoryLocked(changesState.assistedCommit) ||
+      isRepositoryAffectedByAssistedCommit(this.props.repository.path)
     let tooltip: string
 
     if (this.props.currentPullRequest) {
@@ -432,10 +454,13 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
   }
 
   private onBadgeClick = () => {
-    // The badge can't be clicked while the CI status popover is shown, because
-    // in that case the Popover component will recognize the "click outside"
-    // event and close the popover.
     this.props.dispatcher.closeFoldout(FoldoutType.Branch)
+
+    if (this.props.showCIStatusPopover) {
+      this.closePopover()
+      return
+    }
+
     this.openPopover()
   }
 
@@ -489,6 +514,7 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
         prNumber={pr.pullRequestNumber}
         dispatcher={this.props.dispatcher}
         repository={pr.base.gitHubRepository}
+        localRepository={this.props.repository}
         branchName={currentBranchName}
         anchor={this.badgeRef}
         closePopover={this.closePopover}
@@ -512,6 +538,7 @@ export class BranchDropdown extends React.Component<IBranchDropdownProps> {
         number={pr.pullRequestNumber}
         dispatcher={this.props.dispatcher}
         repository={pr.base.gitHubRepository}
+        localRepository={this.props.repository}
         onBadgeRef={this.onBadgeRef}
         onBadgeClick={this.onBadgeClick}
         showCIStatusPopover={this.props.showCIStatusPopover}

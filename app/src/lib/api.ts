@@ -28,7 +28,6 @@ import {
 import { HttpStatusCode } from './http-status-code'
 import { CopilotError, parseCopilotPaymentRequiredError } from './copilot-error'
 import { BypassReasonType } from '../ui/secret-scanning/bypass-push-protection-dialog'
-import { enableShortLivedTokens } from './feature-flag'
 
 const envEndpoint = process.env['DESKTOP_GITHUB_DOTCOM_API_ENDPOINT']
 const envHTMLURL = process.env['DESKTOP_GITHUB_DOTCOM_HTML_URL']
@@ -1006,6 +1005,25 @@ export class API {
       log.warn(`fetchRepository: an error occurred for '${owner}/${name}'`, e)
       return null
     }
+  }
+
+  /**
+   * Fetch a repo by its owner and name to find out whether the account can
+   * access it.
+   *
+   * Resolves to null when the repository isn't visible to the account (404).
+   * Unlike `fetchRepository`, any other failure (network errors, rate limits,
+   * server errors) is thrown so that it isn't mistaken for a lack of access.
+   */
+  public async fetchRepositoryIfAccessible(
+    owner: string,
+    name: string
+  ): Promise<IAPIFullRepository | null> {
+    const response = await this.ghRequest('GET', `repos/${owner}/${name}`)
+    if (response.status === HttpStatusCode.NotFound) {
+      return null
+    }
+    return parsedResponse<IAPIFullRepository>(response)
   }
 
   /**
@@ -2393,18 +2411,17 @@ export function getDotComAPIEndpoint(): string {
   return 'https://api.github.com'
 }
 
-/** Get the account for the endpoint. */
-export function getAccountForEndpoint(
-  accounts: ReadonlyArray<Account>,
-  endpoint: string
-): Account | null {
-  return accounts.find(a => a.endpoint === endpoint) || null
-}
-
+/**
+ * Build an OAuth authorization URL.
+ *
+ * Supplying a login requests that account and disables sign-up. The caller
+ * must still verify the identity returned by OAuth.
+ */
 export function getOAuthAuthorizationURL(
   endpoint: string,
   state: string,
-  shortLived = enableShortLivedTokens()
+  login: string | undefined,
+  shortLived: boolean
 ): string {
   const urlBase = getHTMLURL(endpoint)
   const scope = encodeURIComponent(
@@ -2413,9 +2430,15 @@ export function getOAuthAuthorizationURL(
       : oauthScopes
     ).join(' ')
   )
+  // Without a specific login, let the user pick which of their browser's
+  // GitHub sessions to sign in with rather than silently using the active one.
+  const accountParameters =
+    login === undefined
+      ? '&prompt=select_account'
+      : `&login=${encodeURIComponent(login)}&allow_signup=false`
 
   return new window.URL(
-    `/login/oauth/authorize?client_id=${ClientID}&scope=${scope}&state=${state}`,
+    `/login/oauth/authorize?client_id=${ClientID}&scope=${scope}&state=${state}${accountParameters}`,
     urlBase
   ).toString()
 }
